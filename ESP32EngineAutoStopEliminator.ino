@@ -21,6 +21,10 @@ void setup() {
   // twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
   twai_filter_config_t f_config = { .acceptance_code = CAN_ID_CCU << 21, .acceptance_mask = ((CAN_ID_CCU << 21) ^ (CAN_ID_TCU << 21)) | 0x1fffff, .single_filter = true };
 
+  if (DebugMode == CANDUMP) {
+    f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+  }
+
   // Install TWAI driver
   if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
     Serial.println("Driver installed");
@@ -114,7 +118,9 @@ void loop() {
                       rx_frame.data[5],
                       rx_frame.data[6],
                       rx_frame.data[7]);
+      }
 
+      if (DebugMode != CANDUMP) {
         switch (rx_frame.identifier) {
           case CAN_ID_TCU:
             if ((rx_frame.data[2] & 0x08) != 0x08) {
