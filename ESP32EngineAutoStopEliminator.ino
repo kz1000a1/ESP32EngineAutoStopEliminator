@@ -190,9 +190,7 @@ void loop() {
                   delay(50);  // 50ms delay like real CCU
                               // CAN0.sendFrame(tx_frame);
                   // Queue message for transmission
-                  if (twai_transmit(&tx_frame, pdMS_TO_TICKS(1000)) == ESP_OK) {
-                    printf("Message queued for transmission\n");
-                  } else {
+                  if (twai_transmit(&tx_frame, pdMS_TO_TICKS(1000)) != ESP_OK) {
                     printf("Failed to queue message for transmission\n");
                   }
                   if (DebugMode == DEBUG) {
@@ -214,7 +212,8 @@ void loop() {
 
                   // Discard message(s) that received during delay()
                   // while (CAN0.read(rx_frame)){}
-                  while (twai_receive(&rx_frame, 0) == ESP_OK) {}
+                  // while (twai_receive(&rx_frame, 0) == ESP_OK) {}
+                  twai_clear_receive_queue();
 
                   Retry++;
                 }
