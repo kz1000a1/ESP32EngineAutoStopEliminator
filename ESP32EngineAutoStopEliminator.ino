@@ -100,7 +100,7 @@ void loop() {
   // Check if message is received
   if (alerts_triggered & TWAI_ALERT_RX_DATA) {
     // One or more messages received. Handle all.
-    if (twai_receive(&rx_frame, 0) == ESP_OK) {
+    while (twai_receive(&rx_frame, 0) == ESP_OK) {
       if (DebugMode != NORMAL) {
 
         CurrentTime = millis();
