@@ -2,8 +2,10 @@
 #include "subaru_levorg_vnx.h"
 
 // Pins used to connect to CAN bus transceiver:
-#define RX_PIN GPIO_NUM_21
-#define TX_PIN GPIO_NUM_20
+// #define RX_PIN GPIO_NUM_21
+// #define TX_PIN GPIO_NUM_20
+#define RX_PIN GPIO_NUM_19
+#define TX_PIN GPIO_NUM_22
 
 #define POLLING_RATE_MS 1000
 static bool driver_installed = false;
@@ -103,12 +105,12 @@ void loop() {
     while (twai_receive(&rx_frame, 0) == ESP_OK) {
       if (DebugMode != NORMAL) {
 
-        CurrentTime = millis();
+        CurrentTime = micros();
 
         // Output all received message(s) to CDC port as candump -L
-        Serial.printf("(%d.%03d000) can0 %03X#%02X%02X%02X%02X%02X%02X%02X%02X\n",
-                      CurrentTime / 1000,
-                      CurrentTime % 1000,
+        Serial.printf("(%d.%06d) can0 %03X#%02X%02X%02X%02X%02X%02X%02X%02X\n",
+                      CurrentTime / 1000000,
+                      CurrentTime % 1000000,
                       rx_frame.identifier,
                       rx_frame.data[0],
                       rx_frame.data[1],
@@ -200,11 +202,11 @@ void loop() {
                     printf("Failed to queue message for transmission\n");
                   }
                   if (DebugMode == DEBUG) {
-                    CurrentTime = millis();
+                    CurrentTime = micros();
                     // Output all transmitted message(s) to CDC port as candump -L
-                    Serial.printf("# (%d.%03d000) can0 %03X#%02X%02X%02X%02X%02X%02X%02X%02X\n",
-                                  CurrentTime / 1000,
-                                  CurrentTime % 1000,
+                    Serial.printf("# (%d.%06d) can0 %03X#%02X%02X%02X%02X%02X%02X%02X%02X\n",
+                                  CurrentTime / 1000000,
+                                  CurrentTime % 1000000,
                                   tx_frame.identifier,
                                   tx_frame.data[0],
                                   tx_frame.data[1],
