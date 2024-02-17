@@ -37,6 +37,6 @@ extern enum debug_mode DebugMode;
 #define SUM_CHECK_DIVIDER 365
 
 
-#define MAX_RETRY 5
+#define MAX_RETRY 2
 
 #endif /* __SUBARU_LEVORG_VNX_H_ */

@@ -2,10 +2,10 @@
 #include "subaru_levorg_vnx.h"
 
 // Pins used to connect to CAN bus transceiver:
-// #define RX_PIN GPIO_NUM_21
-// #define TX_PIN GPIO_NUM_20
-#define RX_PIN GPIO_NUM_19
-#define TX_PIN GPIO_NUM_22
+#define RX_PIN GPIO_NUM_21
+#define TX_PIN GPIO_NUM_20
+// #define RX_PIN GPIO_NUM_19
+// #define TX_PIN GPIO_NUM_22
 
 #define POLLING_RATE_MS 1000
 static bool driver_installed = false;
@@ -28,27 +28,27 @@ void setup() {
   }
 
   // Install TWAI driver
-  if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
-    Serial.println("Driver installed");
-  } else {
-    Serial.println("Failed to install driver");
+  if (twai_driver_install(&g_config, &t_config, &f_config) != ESP_OK) {
+    if (DebugMode == DEBUG) {
+      Serial.println("# Error: Failed to install driver");
+    }
     return;
   }
 
   // Start TWAI driver
-  if (twai_start() == ESP_OK) {
-    Serial.println("Driver started");
-  } else {
-    Serial.println("Failed to start driver");
+  if (twai_start() != ESP_OK) {
+    if (DebugMode == DEBUG) {
+      Serial.println("# Error: Failed to start driver");
+    }
     return;
   }
 
   // Reconfigure alerts to detect frame receive, Bus-Off error and RX queue full states
   uint32_t alerts_to_enable = TWAI_ALERT_RX_DATA | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_ERROR | TWAI_ALERT_RX_QUEUE_FULL;
-  if (twai_reconfigure_alerts(alerts_to_enable, NULL) == ESP_OK) {
-    Serial.println("CAN Alerts reconfigured");
-  } else {
-    Serial.println("Failed to reconfigure alerts");
+  if (twai_reconfigure_alerts(alerts_to_enable, NULL) != ESP_OK) {
+    if (DebugMode == DEBUG) {
+      Serial.println("# Error: Failed to reconfigure alerts");
+    }
     return;
   }
 
@@ -86,25 +86,30 @@ void loop() {
 
   // Handle alerts
   if (alerts_triggered & TWAI_ALERT_ERR_PASS) {
-    Serial.println("Alert: TWAI controller has become error passive.");
+    if (DebugMode == DEBUG) {
+      Serial.println("# Alert: TWAI controller has become error passive.");
+    }
   }
   if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
-    Serial.println("Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
-    Serial.printf("Bus error count: %d\n", twaistatus.bus_error_count);
+    if (DebugMode == DEBUG) {
+      Serial.println("# Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
+      Serial.printf("# Bus error count: %d\n", twaistatus.bus_error_count);
+    }
   }
   if (alerts_triggered & TWAI_ALERT_RX_QUEUE_FULL) {
-    Serial.println("Alert: The RX queue is full causing a received frame to be lost.");
-    Serial.printf("RX buffered: %d\t", twaistatus.msgs_to_rx);
-    Serial.printf("RX missed: %d\t", twaistatus.rx_missed_count);
-    Serial.printf("RX overrun %d\n", twaistatus.rx_overrun_count);
+    if (DebugMode == DEBUG) {
+      Serial.println("# Alert: The RX queue is full causing a received frame to be lost.");
+      Serial.printf("# RX buffered: %d\t", twaistatus.msgs_to_rx);
+      Serial.printf("RX missed: %d\t", twaistatus.rx_missed_count);
+      Serial.printf("RX overrun %d\n", twaistatus.rx_overrun_count);
+    }
   }
 
   // Check if message is received
   if (alerts_triggered & TWAI_ALERT_RX_DATA) {
     // One or more messages received. Handle all.
     while (twai_receive(&rx_frame, 0) == ESP_OK) {
-      if (DebugMode != NORMAL) {
-
+      if (DebugMode == CANDUMP || (DebugMode == DEBUG && (rx_frame.identifier == CAN_ID_CCU || rx_frame.identifier == CAN_ID_TCU))) {
         CurrentTime = micros();
 
         // Output all received message(s) to CDC port as candump -L
