@@ -60,10 +60,13 @@ void setup() {
 void loop() {
   twai_message_t rx_frame;
   twai_message_t tx_frame;
-  tx_frame.identifier = CAN_ID_CCU;  //tx_frame.identifier;
+  tx_frame.identifier = CAN_ID_CCU;
   tx_frame.data_length_code = 8;
-  // tx_frame.rtr = 0;
-  // tx_frame.extended = false;
+  tx_frame.rtr = 0;
+  tx_frame.extd = 0;
+  // tx_frame.ss = 0;
+  // tx_frame.self = 0;
+  // tx_frame.dlc_non_comp = 0;
 
   uint32_t CurrentTime;
 
