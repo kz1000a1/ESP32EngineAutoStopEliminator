@@ -64,9 +64,9 @@ void loop() {
   tx_frame.data_length_code = 8;
   tx_frame.rtr = 0;
   tx_frame.extd = 0;
-  // tx_frame.ss = 0;
-  // tx_frame.self = 0;
-  // tx_frame.dlc_non_comp = 0;
+  tx_frame.ss = 1;
+  tx_frame.self = 0;
+  tx_frame.dlc_non_comp = 0;
 
   uint32_t CurrentTime;
 
