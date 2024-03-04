@@ -150,7 +150,7 @@ void loop() {
   if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
     if (DebugMode == DEBUG) {
       Serial.println("# Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
-    Serial.printf("# Bus error count: %d\n", twaistatus.bus_error_count);
+      Serial.printf("# Bus error count: %d\n", twaistatus.bus_error_count);
     }
   }
   if (alerts_triggered & TWAI_ALERT_RX_QUEUE_FULL) {
@@ -233,7 +233,6 @@ void loop() {
                   // Discard message(s) that received during HAL_delay()
                   twai_clear_receive_queue();
                   CcuStatus = NOT_READY;
-                  // led_blink(Status);
                 }
               } else {  // Unexpected case
                 if (DebugMode == DEBUG) {
