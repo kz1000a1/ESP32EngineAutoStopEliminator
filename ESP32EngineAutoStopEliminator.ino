@@ -1,3 +1,6 @@
+//
+// Engine auto start-stop system eliminator firmware for SUBARU Levorg VN5
+//
 #include "driver/twai.h"
 #include "subaru_levorg_vnx.h"
 
@@ -11,6 +14,66 @@
 static bool driver_installed = false;
 
 enum debug_mode DebugMode = DEBUG;
+
+
+void print_frame(twai_message_t* twai_frame) {
+  uint32_t CurrentTime;
+
+  CurrentTime = micros();
+
+  // Output all received message(s) to CDC port as candump -L
+  if (twai_frame->rtr == 0) {  // Data Frame
+    Serial.printf("(%d.%06d) can0 %03X#", CurrentTime / 1000000,
+                  CurrentTime % 1000000,
+                  twai_frame->identifier);
+    for (uint8_t i = 0; i < twai_frame->data_length_code; i++) {
+      Serial.printf("%02X", twai_frame->data[i]);
+    }
+    Serial.printf("\n");
+  } else {  // Remote Frame
+    Serial.printf("(%d.%06d) can0 %03X#R%d\n", CurrentTime / 1000000,
+                  CurrentTime % 1000000,
+                  twai_frame->identifier,
+                  twai_frame->data_length_code);
+  }
+}
+
+
+void send_cancel_frame(twai_message_t* rx_frame) {
+  // Storage for transmit message buffer
+  twai_message_t tx_frame;
+  tx_frame.identifier = CAN_ID_CCU;
+  tx_frame.data_length_code = 8;
+  tx_frame.rtr = 0;
+  tx_frame.extd = 0;
+  tx_frame.ss = 1;
+  tx_frame.self = 0;
+  tx_frame.dlc_non_comp = 0;
+
+  if ((rx_frame->data[1] & 0x0f) == 0x0f) {
+    tx_frame.data[1] = rx_frame->data[1] & 0xf0;
+  } else {
+    tx_frame.data[1] = rx_frame->data[1] + 0x01;
+  }
+  tx_frame.data[2] = rx_frame->data[2];
+  tx_frame.data[3] = rx_frame->data[3];
+  tx_frame.data[4] = rx_frame->data[4];
+  tx_frame.data[5] = rx_frame->data[5];
+  tx_frame.data[6] = rx_frame->data[6] | 0x40;  // Eliminate engine auto stop bit on
+  tx_frame.data[7] = rx_frame->data[7];
+  // Calculate checksum
+  tx_frame.data[0] = (tx_frame.data[1] + tx_frame.data[2] + tx_frame.data[3] + tx_frame.data[4] + tx_frame.data[5] + tx_frame.data[6] + tx_frame.data[7]) % SUM_CHECK_DIVIDER;
+  if (twai_transmit(&tx_frame, pdMS_TO_TICKS(1000)) != ESP_OK) {
+    if (DebugMode == DEBUG) {
+      printf("# Error: Failed to queue message for transmission\n");
+    }
+  }
+  if (DebugMode == DEBUG) {
+    Serial.printf("# ");
+    print_frame(&tx_frame);
+  }
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -59,15 +122,6 @@ void setup() {
 
 void loop() {
   twai_message_t rx_frame;
-  twai_message_t tx_frame;
-  tx_frame.identifier = CAN_ID_CCU;
-  tx_frame.data_length_code = 8;
-  tx_frame.rtr = 0;
-  tx_frame.extd = 0;
-  tx_frame.ss = 1;
-  tx_frame.self = 0;
-  tx_frame.dlc_non_comp = 0;
-
   uint32_t CurrentTime;
 
   static enum cu_status TcuStatus = ENGINE_STOP;
@@ -96,7 +150,7 @@ void loop() {
   if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
     if (DebugMode == DEBUG) {
       Serial.println("# Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
-      Serial.printf("# Bus error count: %d\n", twaistatus.bus_error_count);
+    Serial.printf("# Bus error count: %d\n", twaistatus.bus_error_count);
     }
   }
   if (alerts_triggered & TWAI_ALERT_RX_QUEUE_FULL) {
@@ -108,26 +162,16 @@ void loop() {
     }
   }
 
-  // Check if message is received
+  // If CAN message receive is pending, process the message
   if (alerts_triggered & TWAI_ALERT_RX_DATA) {
     // One or more messages received. Handle all.
     while (twai_receive(&rx_frame, 0) == ESP_OK) {
       if (DebugMode == CANDUMP || (DebugMode == DEBUG && (rx_frame.identifier == CAN_ID_CCU || rx_frame.identifier == CAN_ID_TCU))) {
-        CurrentTime = micros();
+        print_frame(&rx_frame);
+      }
 
-        // Output all received message(s) to CDC port as candump -L
-        Serial.printf("(%d.%06d) can0 %03X#%02X%02X%02X%02X%02X%02X%02X%02X\n",
-                      CurrentTime / 1000000,
-                      CurrentTime % 1000000,
-                      rx_frame.identifier,
-                      rx_frame.data[0],
-                      rx_frame.data[1],
-                      rx_frame.data[2],
-                      rx_frame.data[3],
-                      rx_frame.data[4],
-                      rx_frame.data[5],
-                      rx_frame.data[6],
-                      rx_frame.data[7]);
+      if (rx_frame.rtr != 0 || rx_frame.data_length_code != 8) {
+        continue;
       }
 
       if (DebugMode != CANDUMP) {
@@ -172,66 +216,24 @@ void loop() {
               }
               Status = CANCELLED;
             } else if (Status == PROCESSING) {
-              if (rx_frame.data[6] & 0x02) {
-                CcuStatus = NOT_READY;
-              } else if (CcuStatus == NOT_READY || CcuStatus == ENGINE_STOP || TcuStatus == IDLING_STOP_OFF) {
+              if (CcuStatus == NOT_READY || CcuStatus == ENGINE_STOP || TcuStatus == IDLING_STOP_OFF) {
                 CcuStatus = READY;
               } else if (TcuStatus == IDLING_STOP_ON) {  // Transmit message for eliminate engine auto stop
                 if (MAX_RETRY <= Retry) {                // Previous eliminate engine auto stop message failed
                   if (DebugMode == DEBUG) {
-
                     // Output Warning message
                     Serial.printf("# Warning: Eliminate engine auto stop failed\n");
                   }
-
                   Status = FAILED;
-
                 } else {
-
-                  // Increment counter
-                  if ((rx_frame.data[1] & 0x0f) == 0x0f) {
-                    tx_frame.data[1] = rx_frame.data[1] & 0xf0;
-                  } else {
-                    tx_frame.data[1] = rx_frame.data[1] + 0x01;
-                  }
-                  tx_frame.data[2] = rx_frame.data[2];
-                  tx_frame.data[3] = rx_frame.data[3];
-                  tx_frame.data[4] = rx_frame.data[4];
-                  tx_frame.data[5] = rx_frame.data[5];
-                  tx_frame.data[6] = rx_frame.data[6] | 0x40;  // Eliminate engine auto stop bit on
-                  tx_frame.data[7] = rx_frame.data[7];
-                  // Calculate checksum
-                  tx_frame.data[0] = (tx_frame.data[1] + tx_frame.data[2] + tx_frame.data[3] + tx_frame.data[4] + tx_frame.data[5] + tx_frame.data[6] + tx_frame.data[7]) % SUM_CHECK_DIVIDER;
-
-                  delay(50);  // 50ms delay like real CCU
-                              // CAN0.sendFrame(tx_frame);
-                  // Queue message for transmission
-                  if (twai_transmit(&tx_frame, pdMS_TO_TICKS(1000)) != ESP_OK) {
-                    printf("Failed to queue message for transmission\n");
-                  }
-                  if (DebugMode == DEBUG) {
-                    CurrentTime = micros();
-                    // Output all transmitted message(s) to CDC port as candump -L
-                    Serial.printf("# (%d.%06d) can0 %03X#%02X%02X%02X%02X%02X%02X%02X%02X\n",
-                                  CurrentTime / 1000000,
-                                  CurrentTime % 1000000,
-                                  tx_frame.identifier,
-                                  tx_frame.data[0],
-                                  tx_frame.data[1],
-                                  tx_frame.data[2],
-                                  tx_frame.data[3],
-                                  tx_frame.data[4],
-                                  tx_frame.data[5],
-                                  tx_frame.data[6],
-                                  tx_frame.data[7]);
-                  }
-
-                  // Discard message(s) that received during delay()
-                  // while (CAN0.read(rx_frame)){}
-                  // while (twai_receive(&rx_frame, 0) == ESP_OK) {}
-                  twai_clear_receive_queue();
-
                   Retry++;
+                  // delay(50); // 50ms delay like real CCU
+                  delay(50 / 2);
+                  send_cancel_frame(&rx_frame);  // Transmit message
+                  // Discard message(s) that received during HAL_delay()
+                  twai_clear_receive_queue();
+                  CcuStatus = NOT_READY;
+                  // led_blink(Status);
                 }
               } else {  // Unexpected case
                 if (DebugMode == DEBUG) {
@@ -240,17 +242,14 @@ void loop() {
                 }
               }
             }
-
             PreviousCanId = rx_frame.identifier;
             break;
 
           default:  // Unexpected can id
             if (DebugMode == DEBUG) {
-
               // Output Warning message
               Serial.printf("# Warning: Unexpected can id (0x%03x).\n", rx_frame.identifier);
             }
-
             break;
         }
       }
