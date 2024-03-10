@@ -75,6 +75,44 @@ void send_cancel_frame(twai_message_t* rx_frame) {
 }
 
 
+bool if_can_message_receive_is_pendig() {
+
+  uint32_t alerts_triggered;
+  twai_status_info_t twaistatus;
+  
+  // Check if alert happened
+  twai_read_alerts(&alerts_triggered, pdMS_TO_TICKS(POLLING_RATE_MS));
+  twai_get_status_info(&twaistatus);
+
+  // Handle alerts
+  if (alerts_triggered & TWAI_ALERT_ERR_PASS) {
+    if (DebugMode == DEBUG) {
+      Serial.println("# Alert: TWAI controller has become error passive.");
+    }
+  }
+  if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
+    if (DebugMode == DEBUG) {
+      Serial.println("# Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
+      Serial.printf("# Bus error count: %d\n", twaistatus.bus_error_count);
+    }
+  }
+  if (alerts_triggered & TWAI_ALERT_RX_QUEUE_FULL) {
+    if (DebugMode == DEBUG) {
+      Serial.println("# Alert: The RX queue is full causing a received frame to be lost.");
+      Serial.printf("# RX buffered: %d\t", twaistatus.msgs_to_rx);
+      Serial.printf("RX missed: %d\t", twaistatus.rx_missed_count);
+      Serial.printf("RX overrun %d\n", twaistatus.rx_overrun_count);
+    }
+  }
+  // If CAN message receive is pending, process the message
+  if (alerts_triggered & TWAI_ALERT_RX_DATA) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+
 void setup() {
   Serial.begin(115200);
   while (!Serial)
@@ -135,35 +173,9 @@ void loop() {
     delay(1000);
     return;
   }
-  // Check if alert happened
-  uint32_t alerts_triggered;
-  twai_read_alerts(&alerts_triggered, pdMS_TO_TICKS(POLLING_RATE_MS));
-  twai_status_info_t twaistatus;
-  twai_get_status_info(&twaistatus);
-
-  // Handle alerts
-  if (alerts_triggered & TWAI_ALERT_ERR_PASS) {
-    if (DebugMode == DEBUG) {
-      Serial.println("# Alert: TWAI controller has become error passive.");
-    }
-  }
-  if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
-    if (DebugMode == DEBUG) {
-      Serial.println("# Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
-      Serial.printf("# Bus error count: %d\n", twaistatus.bus_error_count);
-    }
-  }
-  if (alerts_triggered & TWAI_ALERT_RX_QUEUE_FULL) {
-    if (DebugMode == DEBUG) {
-      Serial.println("# Alert: The RX queue is full causing a received frame to be lost.");
-      Serial.printf("# RX buffered: %d\t", twaistatus.msgs_to_rx);
-      Serial.printf("RX missed: %d\t", twaistatus.rx_missed_count);
-      Serial.printf("RX overrun %d\n", twaistatus.rx_overrun_count);
-    }
-  }
 
   // If CAN message receive is pending, process the message
-  if (alerts_triggered & TWAI_ALERT_RX_DATA) {
+  if (if_can_message_receive_is_pendig()) {
     // One or more messages received. Handle all.
     while (twai_receive(&rx_frame, 0) == ESP_OK) {
       if (DebugMode == CANDUMP || (DebugMode == DEBUG && (rx_frame.identifier == CAN_ID_CCU || rx_frame.identifier == CAN_ID_TCU))) {
