@@ -160,7 +160,6 @@ void setup() {
 
 void loop() {
   twai_message_t rx_frame;
-  uint32_t CurrentTime;
 
   static enum cu_status TcuStatus = ENGINE_STOP;
   static enum cu_status CcuStatus = ENGINE_STOP;
