@@ -195,8 +195,8 @@ void loop() {
               TcuStatus = IDLING_STOP_OFF;
               if (Retry != 0 && Status == PROCESSING) {
                 if (DebugMode == DEBUG) {
-                  // Output Warning message
-                  Serial.printf("# Warning: Eliminate engine auto stop succeeded.\n");
+                  // Output Information message
+                  Serial.printf("# Information: Eliminate engine auto stop succeeded.\n");
                 }
                 Status = SUCCEEDED;
               }
@@ -204,8 +204,8 @@ void loop() {
               TcuStatus = IDLING_STOP_ON;
               if (Status == SUCCEEDED) {
                 if (DebugMode == DEBUG) {
-                  // Output Warning message
-                  Serial.printf("# Warning: Eliminate engine auto stop restarted.\n");
+                  // Output Information message
+                  Serial.printf("# Information: Eliminate engine auto stop restarted.\n");
                 }
                 Status = PROCESSING;
                 CcuStatus = NOT_READY;
@@ -223,8 +223,8 @@ void loop() {
               Retry = 0;
             } else if (rx_frame.data[6] & 0x40) {
               if (DebugMode == DEBUG) {
-                // Output Warning message
-                Serial.printf("# Warning: Eliminate engine auto stop cancelled.\n");
+                // Output Information message
+                Serial.printf("# Information: Eliminate engine auto stop cancelled.\n");
               }
               Status = CANCELLED;
             } else if (Status == PROCESSING) {
