@@ -114,9 +114,11 @@ bool if_can_message_receive_is_pendig() {
 
 
 void setup() {
-  Serial.begin(115200);
-  while (!Serial)
-    ;
+  if (DebugMode != NORMAL) {
+    Serial.begin(115200);
+    while (!Serial)
+      ;
+  }
 
   // Initialize configuration structures using macro initializers
   twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)TX_PIN, (gpio_num_t)RX_PIN, TWAI_MODE_NORMAL);
