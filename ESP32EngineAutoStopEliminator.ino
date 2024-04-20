@@ -65,7 +65,7 @@ void send_cancel_frame(twai_message_t* rx_frame) {
   tx_frame.data[0] = (tx_frame.data[1] + tx_frame.data[2] + tx_frame.data[3] + tx_frame.data[4] + tx_frame.data[5] + tx_frame.data[6] + tx_frame.data[7]) % SUM_CHECK_DIVIDER;
   if (twai_transmit(&tx_frame, pdMS_TO_TICKS(1000)) != ESP_OK) {
     if (DebugMode == DEBUG) {
-      printf("# Error: Failed to queue message for transmission\n");
+      Serial.printf("# Error: Failed to queue message for transmission\n");
     }
   }
   if (DebugMode == DEBUG) {
