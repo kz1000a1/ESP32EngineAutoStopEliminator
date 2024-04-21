@@ -13,7 +13,7 @@
 #define POLLING_RATE_MS 1000
 static bool driver_installed = false;
 
-enum debug_mode DebugMode = DEBUG;
+enum debug_mode DebugMode = NORMAL;
 
 
 void print_frame(twai_message_t* twai_frame) {
