@@ -245,6 +245,7 @@ void loop() {
                   send_cancel_frame(&rx_frame);  // Transmit message
                   // Discard message(s) that received during HAL_delay()
                   twai_clear_receive_queue();
+				          rx_frame.identifier = CAN_ID_TCU;
                   CcuStatus = NOT_READY;
                 }
               } else {  // Unexpected case
