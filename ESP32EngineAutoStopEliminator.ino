@@ -163,8 +163,8 @@ void setup() {
 void loop() {
   twai_message_t rx_frame;
 
-  static enum cu_status TcuStatus = ENGINE_STOP;
-  static enum cu_status CcuStatus = ENGINE_STOP;
+  static enum tcu_status TcuStatus = NOT_READY;
+  static enum ccu_status CcuStatus = ENGINE_STOP;
   static enum status Status = PROCESSING;
   static uint16_t PreviousCanId = CAN_ID_CCU;
   static uint8_t Retry = 0;
@@ -192,25 +192,27 @@ void loop() {
           case CAN_ID_TCU:
             if ((rx_frame.data[2] & 0x08) != 0x08) {
               TcuStatus = NOT_READY;
-            } else if (rx_frame.data[4] == 0xc0) {
-              TcuStatus = IDLING_STOP_OFF;
-              if (Retry != 0 && Status == PROCESSING) {
-                if (DebugMode == DEBUG) {
-                  // Output Information message
-                  Serial.printf("# Information: Eliminate engine auto stop succeeded.\n");
-                }
-                Status = SUCCEEDED;
-              }
             } else {
-              TcuStatus = IDLING_STOP_ON;
-              if (Status == SUCCEEDED) {
-                if (DebugMode == DEBUG) {
-                  // Output Information message
-                  Serial.printf("# Information: Eliminate engine auto stop restarted.\n");
+	      if (rx_frame.data[4] == 0xc0) {
+                TcuStatus = IDLING_STOP_OFF;
+                if (Retry != 0 && Status == PROCESSING) {
+                  if (DebugMode == DEBUG) {
+                    // Output Information message
+                    Serial.printf("# Information: Eliminate engine auto stop succeeded.\n");
+                  }
+                  Status = SUCCEEDED;
                 }
-                Status = PROCESSING;
-                CcuStatus = NOT_READY;
-                Retry = 0;
+              } else {
+                TcuStatus = IDLING_STOP_ON;
+                if (Status == SUCCEEDED) {
+                  if (DebugMode == DEBUG) {
+                    // Output Information message
+                    Serial.printf("# Information: Eliminate engine auto stop restarted.\n");
+                  }
+                  Status = PROCESSING;
+                  CcuStatus = PAUSE;
+                  Retry = 0;
+		}
               }
             }
             PreviousCanId = rx_frame.identifier;
@@ -218,41 +220,50 @@ void loop() {
 
           case CAN_ID_CCU:
             if (PreviousCanId == CAN_ID_CCU) {  // TCU don't transmit message
+              TcuStatus = NOT_READY;
               CcuStatus = ENGINE_STOP;
-              TcuStatus = ENGINE_STOP;
               Status = PROCESSING;
               Retry = 0;
-            } else if (rx_frame.data[6] & 0x40) {
-              if (DebugMode == DEBUG) {
-                // Output Information message
-                Serial.printf("# Information: Eliminate engine auto stop cancelled.\n");
-              }
-              Status = CANCELLED;
-            } else if (Status == PROCESSING) {
-              if (CcuStatus == NOT_READY || CcuStatus == ENGINE_STOP || TcuStatus == IDLING_STOP_OFF) {
-                CcuStatus = READY;
-              } else if (TcuStatus == IDLING_STOP_ON) {  // Transmit message for eliminate engine auto stop
-                if (MAX_RETRY <= Retry) {                // Previous eliminate engine auto stop message failed
-                  if (DebugMode == DEBUG) {
-                    // Output Warning message
-                    Serial.printf("# Warning: Eliminate engine auto stop failed\n");
-                  }
-                  Status = FAILED;
-                } else {
-                  Retry++;
-                  // delay(50); // 50ms delay like real CCU
-                  delay(50 / 2);
-                  send_cancel_frame(&rx_frame);  // Transmit message
-                  // Discard message(s) that received during HAL_delay()
-                  twai_clear_receive_queue();
-		  rx_frame.identifier = CAN_ID_TCU;
-                  CcuStatus = NOT_READY;
-                }
-              } else {  // Unexpected case
+            } else {
+	      if (rx_frame.data[6] & 0x40) {
                 if (DebugMode == DEBUG) {
-                  // Output Warning message
-                  Serial.printf("# Warning: Unexpected case (CCU=%d TCU=%d).\n", CcuStatus, TcuStatus);
+                  // Output Information message
+                  Serial.printf("# Information: Eliminate engine auto stop cancelled.\n");
                 }
+                Status = CANCELLED;
+              }
+	      switch(Status){
+		case PROCESSING:
+                  switch(CcuStatus){
+		    case READY:
+                      if (TcuStatus == IDLING_STOP_ON) {  // Transmit message for eliminate engine auto stop
+                        if (MAX_RETRY <= Retry) {                // Previous eliminate engine auto stop message failed
+                          if (DebugMode == DEBUG) {
+                            // Output Warning message
+                            Serial.printf("# Warning: Eliminate engine auto stop failed\n");
+                          }
+                          Status = FAILED;
+                        } else {
+                          Retry++;
+                          // delay(50); // 50ms delay like real CCU
+                          delay(50 / 2);
+                          send_cancel_frame(&rx_frame);  // Transmit message
+                          // Discard message(s) that received during HAL_delay()
+                          twai_clear_receive_queue();
+		          rx_frame.identifier = CAN_ID_TCU;
+                          CcuStatus = PAUSE;
+                        }
+		      }
+		      break;
+			  
+		    case ENGINE_STOP:
+		    case PAUSE:
+                      CcuStatus = READY;
+		      break;
+		  }
+			  
+		default: // SUCCEEDED or FAILED or CANCELED
+		  break;
               }
             }
             PreviousCanId = rx_frame.identifier;
